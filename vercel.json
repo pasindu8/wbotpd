@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "functions": {
-    "api/send-message.js": {
-      "memory": 512,
-      "maxDuration": 30
-    }
-  }
+  "builds": [
+    { "src": "api/send-message.js", "use": "@vercel/node" }
+  ],
+  "routes": [
+    { "src": "/api/send-message", "dest": "api/send-message.js" }
+  ]
 }
