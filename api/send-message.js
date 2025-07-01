@@ -1,45 +1,37 @@
-const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys')
+const { default: makeWASocket, useSingleFileAuthState } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+const fs = require('fs');
+const path = require('path');
 
-let sockPromise // so we initialize once
+const authFile = path.resolve(__dirname, 'auth_info.json'); // session file in same folder
+const { state, saveState } = useSingleFileAuthState(authFile);
 
-async function getSock() {
-    if (!sockPromise) {
-        sockPromise = (async () => {
-            const { state, saveCreds } = await useMultiFileAuthState('sessions')
-            const { version } = await fetchLatestBaileysVersion()
-            const sock = makeWASocket({
-                version,
-                auth: state,
-                printQRInTerminal: true,
-                browser: ['Ubuntu', 'Chrome', '22.04.4']
-            })
-            sock.ev.on('creds.update', saveCreds)
-            return sock
-        })()
-    }
-    return sockPromise
-}
+const sock = makeWASocket({
+  auth: state,
+  printQRInTerminal: true,
+});
+
+sock.ev.on('creds.update', saveState);
 
 module.exports = async (req, res) => {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ status: 'error', message: 'Only POST allowed' })
-    }
+  if (req.method !== 'POST') {
+    res.status(405).json({ status: 'error', message: 'Method not allowed' });
+    return;
+  }
 
-    const { number, message } = req.body
+  const { number, message } = req.body;
 
-    if (!number || !message) {
-        return res.status(400).json({ status: 'error', message: 'Missing number or message' })
-    }
+  if (!number || !message) {
+    res.status(400).json({ status: 'error', message: 'Missing number or message' });
+    return;
+  }
 
-    try {
-        const sock = await getSock()
-        const jid = number + '@s.whatsapp.net'
-        await sock.sendMessage(jid, { text: message })
+  try {
+    const jid = number.includes('@s.whatsapp.net') ? number : `${number}@s.whatsapp.net`;
+    await sock.sendMessage(jid, { text: message });
 
-        res.status(200).json({ status: 'success', to: number, message })
-    } catch (err) {
-        console.error('❌', err)
-        res.status(500).json({ status: 'error', error: err.message })
-    }
-}
-
+    res.status(200).json({ status: 'success', message: 'Message sent!' });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+};
